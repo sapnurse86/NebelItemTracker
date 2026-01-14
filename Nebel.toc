@@ -8,4 +8,5 @@
 Core.lua
 Sync.lua
 UI.lua
+Minimap.lua
 Tooltip.lua
