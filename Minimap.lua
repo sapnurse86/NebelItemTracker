@@ -55,6 +55,27 @@ end
 function N.CreateMinimapButton()
     if N.minimapButton then return end
 
+    -- Prefer LibDataBroker / LibDBIcon when available: register a launcher and skip creating
+    local LDB = LibStub and LibStub("LibDataBroker-1.1", true)
+    local LDBIcon = LibStub and LibStub("LibDBIcon-1.0", true)
+    if LDB and LDBIcon then
+        local dataobj = LDB:NewDataObject("Nebel", {
+            type = "launcher",
+            icon = "Interface\\AddOns\\Nebel\\Media\\MinimapIcon",
+            OnClick = function(_, button)
+                if button == "LeftButton" then
+                    if N.CreateMainWindow then N.CreateMainWindow() end
+                end
+            end,
+            OnTooltipShow = function(tt)
+                tt:AddLine("Nur LIBRE", 1, 1, 1)
+            end,
+        })
+
+        LDBIcon:Register("Nebel", dataobj, NebelDB.minimap or {})
+        return
+    end
+
     -- SecureActionButtonTemplate so click works even if MBB overwrites scripts
     local btn = CreateFrame("Button", "NebelMinimapButton", Minimap, "SecureActionButtonTemplate")
     N.minimapButton = btn
@@ -70,7 +91,7 @@ function N.CreateMinimapButton()
     btn:SetAttribute("macrotext", "/nebel")
 
     -- Tooltip text used by some collectors
-    btn.tooltipText = "Nebel Item Tracker\nLeft-click: Toggle window"
+    btn.tooltipText = "LIBRE"
 
     -------------------------------------------------------------------
     -- Textures (MBB-friendly: NormalTexture is important)
@@ -113,18 +134,17 @@ function N.CreateMinimapButton()
         btn:SetScript("OnDragStop", function(self)
             btn:SetScript("OnUpdate", nil)
         end)
-
-        -- Tooltip only when not managed by MBB (MBB often handles its own)
-        btn:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-            GameTooltip:AddLine("Nebel Item Tracker", 1, 1, 1)
-            GameTooltip:AddLine("Left-click: Toggle window", 0.8, 0.8, 0.8)
-            GameTooltip:AddLine("Drag: Move icon", 0.8, 0.8, 0.8)
-            GameTooltip:Show()
-        end)
-
-        btn:SetScript("OnLeave", function()
-            GameTooltip:Hide()
-        end)
     end
-end
+
+    -- Ensure tooltip shows even when MinimapButtonButton collects/manages the button
+    btn:HookScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("LIBRE", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+
+    btn:HookScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    end

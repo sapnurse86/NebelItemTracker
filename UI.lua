@@ -3,7 +3,7 @@ Nebel = Nebel or {}
 local N = Nebel
 
 -----------------------------------------------------------------------
--- Internal helpers
+-- Helpers
 -----------------------------------------------------------------------
 
 local function ExtractItemIDFromAny(input)
@@ -13,7 +13,7 @@ local function ExtractItemIDFromAny(input)
     local asNum = tonumber(input)
     if asNum then return asNum end
 
-    -- item link or partial link text
+    -- item link / partial item link
     local fromLink = string.match(input, "item:(%d+)")
     if fromLink then return tonumber(fromLink) end
 
@@ -41,48 +41,64 @@ local function GetItemLinkFromCursor()
 end
 
 -----------------------------------------------------------------------
--- Custom Count Dialog (replaces StaticPopupDialogs)
+-- Custom Count Dialog (properly centered)
 -----------------------------------------------------------------------
 
-local pendingDropInput = nil -- stores itemLink or "item:<id>"
+local pendingDropInput = nil
 
 local function EnsureCountDialog()
     if N.countDialog then return N.countDialog end
 
-    local d = CreateFrame("Frame", "NebelCountDialog", UIParent, "BasicFrameTemplateWithInset")
+    local d = CreateFrame("Frame", "NebelCountDialog", UIParent, "BasicFrameTemplate")
     N.countDialog = d
-    d:SetSize(360, 150)
+
+    d:SetSize(360, 170)
     d:SetPoint("CENTER")
     d:SetFrameStrata("DIALOG")
-    d:Hide()
     d:SetClampedToScreen(true)
+    d:Hide()
 
     d.title = d:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    d.title:SetPoint("TOP", 0, -10)
+    d.title:SetPoint("TOP", 0, -5)
     d.title:SetText("How many do you need?")
 
-    d.itemLine = d:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    d.itemLine:SetPoint("TOP", 0, -40)
+    -- Content container (centers the whole block)
+    local content = CreateFrame("Frame", nil, d)
+    d.content = content
+    content:SetSize(300, 80)
+    content:SetPoint("CENTER", d, "CENTER", 0, -5)
+
+    -- Item icon
+    d.itemIcon = content:CreateTexture(nil, "ARTWORK")
+    d.itemIcon:SetSize(32, 32)
+    d.itemIcon:SetPoint("LEFT", content, "LEFT", 0, 0)
+    d.itemIcon:Hide()
+
+    -- Item line (text)
+    d.itemLine = content:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    d.itemLine:SetPoint("LEFT", d.itemIcon, "RIGHT", 6, 0)
+    d.itemLine:SetJustifyH("LEFT")
     d.itemLine:SetText("")
 
-    d.editBox = CreateFrame("EditBox", nil, d, "InputBoxTemplate")
-    d.editBox:SetSize(80, 30)
-    d.editBox:SetPoint("TOP", 0, -65)
+    -- Count input (placed to the right of the item name)
+    d.editBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
+    d.editBox:SetSize(60, 26)
     d.editBox:SetAutoFocus(true)
     d.editBox:SetNumeric(true)
+    d.editBox:SetPoint("LEFT", d.itemLine, "RIGHT", 10, 0)
 
-    -- OK button
+    -- Buttons
     d.okBtn = CreateFrame("Button", nil, d, "GameMenuButtonTemplate")
     d.okBtn:SetSize(120, 25)
     d.okBtn:SetPoint("BOTTOMLEFT", 30, 15)
     d.okBtn:SetText("OK")
 
-    -- Cancel button
     d.cancelBtn = CreateFrame("Button", nil, d, "GameMenuButtonTemplate")
     d.cancelBtn:SetSize(120, 25)
     d.cancelBtn:SetPoint("BOTTOMRIGHT", -30, 15)
     d.cancelBtn:SetText("Cancel")
 
+    -- Behavior
     local function Confirm()
         local v = tonumber(d.editBox:GetText())
         local count = (v and v > 0) and v or 1
@@ -101,10 +117,7 @@ local function EnsureCountDialog()
         d:Hide()
     end)
 
-    d.editBox:SetScript("OnEnterPressed", function()
-        Confirm()
-    end)
-
+    d.editBox:SetScript("OnEnterPressed", Confirm)
     d.editBox:SetScript("OnEscapePressed", function()
         pendingDropInput = nil
         d:Hide()
@@ -118,7 +131,7 @@ local function ShowCountDialog(itemInput)
     pendingDropInput = itemInput
 
     local itemID = ExtractItemIDFromAny(itemInput)
-    local _, link = itemID and GetItemInfo(itemID) or nil
+    local name, link, _, _, _, _, _, _, _, texture = GetItemInfo(itemID or itemInput)
 
     if link then
         d.itemLine:SetText(link)
@@ -126,7 +139,14 @@ local function ShowCountDialog(itemInput)
         d.itemLine:SetText("|cFFFFCC00" .. tostring(itemInput) .. "|r")
     end
 
-    -- Prefill existing count if already tracked
+    if texture then
+        d.itemIcon:SetTexture(texture)
+        d.itemIcon:Show()
+    else
+        d.itemIcon:Hide()
+    end
+
+    -- Prefill existing count
     if itemID and N.playerNeeds and N.playerNeeds[itemID] then
         d.editBox:SetText(tostring(N.playerNeeds[itemID]))
     else
@@ -141,7 +161,6 @@ end
 local function HandleDroppedItem()
     local link = GetItemLinkFromCursor()
     if not link then return end
-
     ClearCursor()
     ShowCountDialog(link)
 end
@@ -154,7 +173,7 @@ function N.AddNeededItem(itemInput, count)
     local itemID = ExtractItemIDFromAny(itemInput)
 
     if not itemID then
-        -- Try resolve by name (cache required)
+        -- Try resolve by name (requires cache)
         local _, itemLink = GetItemInfo(itemInput)
         if itemLink then
             itemID = ExtractItemIDFromAny(itemLink)
@@ -169,27 +188,23 @@ function N.AddNeededItem(itemInput, count)
     N.playerNeeds[itemID] = count
     NebelDB.playerNeeds = N.playerNeeds
 
-    N.UpdateItemList()
-    if N.BroadcastNeeds then
-        N.BroadcastNeeds()
-    end
+    if N.UpdateItemList then N.UpdateItemList() end
+    if N.BroadcastNeeds then N.BroadcastNeeds() end
 end
 
 function N.RemoveNeededItem(itemID)
     N.playerNeeds[itemID] = nil
     NebelDB.playerNeeds = N.playerNeeds
 
-    N.UpdateItemList()
-    if N.BroadcastNeeds then
-        N.BroadcastNeeds()
-    end
+    if N.UpdateItemList then N.UpdateItemList() end
+    if N.BroadcastNeeds then N.BroadcastNeeds() end
 end
 
 function N.UpdateItemList()
     if not N.contentFrame then return end
     local contentFrame = N.contentFrame
 
-    -- Clear existing items safely
+    -- Clear existing rows
     if contentFrame.items then
         for i = 1, #contentFrame.items do
             contentFrame.items[i]:Hide()
@@ -200,23 +215,33 @@ function N.UpdateItemList()
 
     local yOffset = 0
     for itemID, needCount in pairs(N.playerNeeds) do
-        local _, itemLink = GetItemInfo(itemID)
+        local name, itemLink, _, _, _, _, _, _, _, texture = GetItemInfo(itemID)
 
-        local itemFrame = CreateFrame("Frame", nil, contentFrame)
-        itemFrame:SetSize(360, 30)
-        itemFrame:SetPoint("TOPLEFT", 5, -yOffset)
+        local row = CreateFrame("Frame", nil, contentFrame)
+        row:SetSize(360, 30)
+        row:SetPoint("TOPLEFT", 5, -yOffset)
 
-        local itemText = itemFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        itemText:SetPoint("LEFT", 5, 0)
-
-        if itemLink then
-            itemText:SetText(itemLink .. " x" .. needCount)
+        local icon = row:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(20, 20)
+        icon:SetPoint("LEFT", 5, 0)
+        if texture then
+            icon:SetTexture(texture)
+            icon:Show()
         else
-            itemText:SetText("|cFFFFCC00ItemID: " .. itemID .. " (loading...)|r x" .. needCount)
-            GetItemInfo(itemID) -- trigger cache load
+            icon:Hide()
         end
 
-        local deleteBtn = CreateFrame("Button", nil, itemFrame, "GameMenuButtonTemplate")
+        local text = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        text:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+
+        if itemLink then
+            text:SetText(itemLink .. " x" .. needCount)
+        else
+            text:SetText("|cFFFFCC00ItemID: " .. itemID .. " (loading...)|r x" .. needCount)
+            GetItemInfo(itemID) -- trigger cache
+        end
+
+        local deleteBtn = CreateFrame("Button", nil, row, "GameMenuButtonTemplate")
         deleteBtn:SetSize(60, 20)
         deleteBtn:SetPoint("RIGHT", -5, 0)
         deleteBtn:SetText("Remove")
@@ -224,13 +249,13 @@ function N.UpdateItemList()
             N.RemoveNeededItem(itemID)
         end)
 
-        table.insert(contentFrame.items, itemFrame)
+        table.insert(contentFrame.items, row)
         yOffset = yOffset + 35
     end
 end
 
 -----------------------------------------------------------------------
--- Main Window (with Add button + drag&drop targets)
+-- Main Window
 -----------------------------------------------------------------------
 
 function N.CreateMainWindow()
