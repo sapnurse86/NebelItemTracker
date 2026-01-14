@@ -1,0 +1,11 @@
+## Interface: 11506
+## Title: Nebel Item Tracker
+## Notes: Track needed items and share needs with NEBEL
+## Author: Sapnurse
+## Version: 1.0.0
+## SavedVariables: NebelDB
+
+Core.lua
+Sync.lua
+UI.lua
+Tooltip.lua
