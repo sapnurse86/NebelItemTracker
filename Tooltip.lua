@@ -16,13 +16,7 @@ local function OnTooltipSetItem(tooltip)
 
     local lines = {}
 
-    -- You
-    local myCount = N.playerNeeds[itemID]
-    if myCount then
-        lines[#lines + 1] = "|cFF00FF00" .. UnitName("player") .. "|r needs x" .. myCount
-    end
-
-    -- Others
+    -- Only OTHER players (not you)
     for playerName, needs in pairs(N.otherPlayerNeeds) do
         local cnt = needs[itemID]
         if cnt then
